@@ -49,10 +49,13 @@ while true; do
             # 格式: #REGISTER#|<NodeName>|<IP>|<Port>
             # ==========================================
             if [[ "$TEXT" == *"#REGISTER#"* ]]; then
-                IFS='|' read -r MAGIC NODE_NAME AGENT_IP AGENT_PORT <<< "$TEXT"
-                # UPSERT 逻辑: 如果节点存在则更新 IP/Port 和在线时间，不存在则插入
+                # 提取包含暗号的那一行，并剔除可能误复制的反引号和空格
+                REG_LINE=$(echo "$TEXT" | grep "#REGISTER#" | head -n 1 | tr -d '\` ')
+                IFS='|' read -r MAGIC NODE_NAME AGENT_IP AGENT_PORT <<< "$REG_LINE"
+                
+                # UPSERT 逻辑
                 db_exec "INSERT INTO nodes (chat_id, node_name, agent_ip, agent_port, last_seen) VALUES ('$CHAT_ID', '$NODE_NAME', '$AGENT_IP', '$AGENT_PORT', CURRENT_TIMESTAMP) ON CONFLICT(chat_id, node_name) DO UPDATE SET agent_ip='$AGENT_IP', agent_port='$AGENT_PORT', last_seen=CURRENT_TIMESTAMP;"
-                send_msg "$CHAT_ID" "✅ 节点注册成功/续期: \`$NODE_NAME\` ($AGENT_IP:$AGENT_PORT)"
+                send_msg "$CHAT_ID" "✅ 司令部已确认！节点接入成功: \`$NODE_NAME\` ($AGENT_IP:$AGENT_PORT)"
                 continue
             fi
 

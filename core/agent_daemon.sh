@@ -24,14 +24,15 @@ AGENT_IP=$(curl -4 -s -m 5 api.ip.sb/ip)
 
 if [ -n "$AGENT_IP" ]; then
     # 2. 向 Master 发送注册暗号 (借助 TG API)
-    # 格式严格匹配 Master 端的正则: #REGISTER#|<NodeName>|<IP>|<Port>
-    REG_MSG="#REGISTER#|${NODE_NAME}|${AGENT_IP}|${AGENT_PORT}"
+    # 【升级点】利用 TG API 机制，引导用户充当“安全网关”手动转发授权
+    REG_MSG="👋 **[边缘节点接入申请]**%0A节点: \`${NODE_NAME}\`%0A地址: \`${AGENT_IP}:${AGENT_PORT}\`%0A%0A⚠️ **安全验证**: 为防止非法节点接入，请长按复制下方代码，并**发送给我**以完成最终授权录入：%0A%0A\`#REGISTER#|${NODE_NAME}|${AGENT_IP}|${AGENT_PORT}\`"
     
     curl -s -m 5 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
         -d "chat_id=${CHAT_ID}" \
-        -d "text=${REG_MSG}" > /dev/null
+        -d "text=${REG_MSG}" \
+        -d "parse_mode=Markdown" > /dev/null
     
-    echo "✅ [Agent] 已向司令部发送注册/续期请求: $NODE_NAME ($AGENT_IP:$AGENT_PORT)"
+    echo "✅ [Agent] 已向司令部发送接入申请，请在 Telegram 手机端完成授权！"
 fi
 
 # 3. 启动轻量级 Python3 Webhook 监听服务
