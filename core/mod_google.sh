@@ -56,8 +56,9 @@ SESSION_UA=${UA_POOL[$RANDOM % ${#UA_POOL[@]}]}
 # 位置锁定：在基准点(比如东京新宿)附近 3 公里内随机生成本次上网的“固定咖啡馆”坐标
 SESSION_BASE_LAT=$(get_random_coord $BASE_LAT 270)
 SESSION_BASE_LON=$(get_random_coord $BASE_LON 270)
-# 随机决定本次上网深度 (4 - 8 个复合动作)
-TOTAL_ACTIONS=$((4 + RANDOM % 5))
+
+# 【核心升级】随机决定本次上网深度 (6 - 10 个复合动作，配合高频长效拉伸)
+TOTAL_ACTIONS=$((6 + RANDOM % 5))
 
 log "$MODULE_NAME" "INFO " "当前出网 IP: $CURRENT_V4"
 log "$MODULE_NAME" "INFO " "设备指纹锁定: ${SESSION_UA:0:45}..."
@@ -97,9 +98,11 @@ for ((i=1; i<=TOTAL_ACTIONS; i++)); do
     
     log "$MODULE_NAME" "EXEC " "动作[$i/$TOTAL_ACTIONS]完成 | HTTP状态: $CODE | 抖动坐标: $ACTION_LAT, $ACTION_LON"
     
-    # 行为拉伸：模拟真实的阅读停顿休眠 (60-120秒)
+    # 【核心升级】行为拉伸：每次动作后强制休眠 90 - 150 秒
+    # 结合动作总数，总耗时将稳定在 10 分钟 到 25 分钟之间
     if [ $i -lt $TOTAL_ACTIONS ]; then
-        SLEEP_TIME=$((60 + RANDOM % 61))
+        SLEEP_TIME=$((90 + RANDOM % 61))
+        log "$MODULE_NAME" "WAIT " "阅读当前页面内容，模拟停留 $SLEEP_TIME 秒..."
         sleep $SLEEP_TIME
     fi
 done
