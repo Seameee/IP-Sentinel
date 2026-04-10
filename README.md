@@ -35,7 +35,7 @@
 找一台网络稳定的 VPS 作为大脑（仅需部署一台），以 root 身份执行：
 
 ```Bash
-bash <(curl -sL https://git.94211762.xyz/hotyue/IP-Sentinel/raw/branch/main/master/install_master.sh)
+bash <(curl -sL https://raw.githubusercontent.com/hotyue/IP-Sentinel/refs/heads/main/master/install_master.sh)
 ```
 完成后，你的机器人将开始全局接客，等待边缘节点注册。
 
@@ -43,7 +43,7 @@ bash <(curl -sL https://git.94211762.xyz/hotyue/IP-Sentinel/raw/branch/main/mast
 在你需要养护 IP 的无数台目标机器（包括 NAT 机器）上执行：
 
 ```Bash
-bash <(curl -sL https://git.94211762.xyz/hotyue/IP-Sentinel/raw/branch/main/core/install.sh)
+bash <(curl -sL https://raw.githubusercontent.com/hotyue/IP-Sentinel/refs/heads/main/core/install.sh)
 ```
 安装时输入与 Master 相同的 Bot Token 及自定义 Webhook 端口。安装完毕后，请在手机 TG 端将生成的 #REGISTER# 暗号转发给机器人，完成安全授权入库！
 
