@@ -1,0 +1,20 @@
+{
+  "region_name": "France - Paris",
+  "google_module": {
+    "base_lat": 48.8566,
+    "base_lon": 2.3522,
+    "lang_params": "hl=fr&gl=FR",
+    "valid_url_suffix": "fr"
+  },
+  "trust_module": {
+    "white_urls": [
+      "https://www.lemonde.fr/",
+      "https://www.lefigaro.fr/",
+      "https://www.amazon.fr/",
+      "https://www.service-public.fr/",
+      "https://fr.wikipedia.org/wiki/Sp%C3%A9cial:Page_au_hasard",
+      "https://www.cdiscount.com/",
+      "https://www.fnac.com/"
+    ]
+  }
+}
