@@ -38,9 +38,11 @@ if [ ! -s "/tmp/map.json" ]; then
 fi
 
 echo -e "\n请选择操作:"
-echo "  1) 🚀 部署边缘节点 (进入全球节点配置)"
-echo "  2) 🗑️ 一键卸载 IP-Sentinel"
-read -p "请输入选择 [1-2] (默认1): " ACTION_CHOICE
+echo " 1) 🚀 部署边缘节点 (进入全球节点配置)"
+echo " 2) 🗑️ 一键卸载 IP-Sentinel"
+echo " 3) 🔄 智能更新 (保留现有配置)"
+read -p "请输入选择 [1-3] (默认1): " ACTION_CHOICE
+ACTION_CHOICE=${ACTION_CHOICE:-1}
 
 if [ "$ACTION_CHOICE" == "2" ]; then
     echo -e "\n⏳ 正在拉取卸载程序..."
@@ -50,6 +52,123 @@ if [ "$ACTION_CHOICE" == "2" ]; then
     rm -f "/tmp/ip_uninstall.sh"
     exit 0
 fi
+
+# ================== [v3.2.2 新增: 智能更新模式] ==================
+if [ "$ACTION_CHOICE" == "3" ]; then
+    echo -e "\n🔄 正在检测现有配置..."
+    
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "\033[31m❌ 未找到现有配置！请先执行完整部署。\033[0m"
+        exit 1
+    fi
+    
+    # 备份当前配置
+    echo "💾 正在备份现有配置..."
+    cp "$CONFIG_FILE" "/tmp/ip_sentinel_config_backup.conf"
+    
+    # 读取关键配置参数
+    source "$CONFIG_FILE"
+    
+    echo -e "\033[32m✅ 检测到现有配置:\033[0m"
+    echo "  📍 区域: $REGION_NAME ($REGION_CODE)"
+    echo "  🌐 IP: $BIND_IP"
+    echo "  🔌 端口: $AGENT_PORT"
+    if [ -n "$TG_TOKEN" ] && [ "$TG_TOKEN" != "" ]; then
+        echo "  🤖 Telegram: 已配置"
+    else
+        echo "  🤖 Telegram: 未配置"
+    fi
+    
+    echo -e "\n⏳ 正在清理旧版核心引擎..."
+    # 停止现有服务
+    pkill -9 -f "webhook.py" >/dev/null 2>&1 || true
+    pkill -9 -f "agent_daemon.sh" >/dev/null 2>&1 || true
+    pkill -9 -f "runner.sh" >/dev/null 2>&1 || true
+    
+    # 清除系统定时任务
+    if crontab -l >/dev/null 2>&1; then
+        crontab -l | grep -v "ip_sentinel" > /tmp/cron_clean
+        crontab /tmp/cron_clean
+        rm -f /tmp/cron_clean
+    fi
+    
+    # 删除旧代码但保留配置和日志
+    if [ -d "$INSTALL_DIR" ]; then
+        rm -rf "${INSTALL_DIR}/core" "${INSTALL_DIR}/data" "${INSTALL_DIR}/.last_ip" 2>/dev/null
+    fi
+    
+    echo -e "\033[32m✅ 旧版核心已清理！\033[0m"
+    echo -e "\n⏳ 正在拉取最新核心引擎..."
+    
+    # 恢复配置
+    mkdir -p "${INSTALL_DIR}/core"
+    cp "/tmp/ip_sentinel_config_backup.conf" "$CONFIG_FILE"
+    rm -f "/tmp/ip_sentinel_config_backup.conf"
+    
+    # 重新加载配置
+    source "$CONFIG_FILE"
+    
+    # 重新创建目录结构
+    mkdir -p "${INSTALL_DIR}/data/keywords"
+    mkdir -p "${INSTALL_DIR}/logs"
+    
+    # 拉取最新核心组件
+    curl -sL "${REPO_RAW_URL}/core/runner.sh" -o "${INSTALL_DIR}/core/runner.sh"
+    curl -sL "${REPO_RAW_URL}/core/updater.sh" -o "${INSTALL_DIR}/core/updater.sh"
+    curl -sL "${REPO_RAW_URL}/core/tg_report.sh" -o "${INSTALL_DIR}/core/tg_report.sh"
+    curl -sL "${REPO_RAW_URL}/core/agent_daemon.sh" -o "${INSTALL_DIR}/core/agent_daemon.sh"
+    curl -sL "${REPO_RAW_URL}/core/uninstall.sh" -o "${INSTALL_DIR}/core/uninstall.sh"
+    curl -sL "${REPO_RAW_URL}/data/user_agents.txt" -o "${INSTALL_DIR}/data/user_agents.txt"
+    
+    # 根据配置按需下载模块
+    if [ "$ENABLE_GOOGLE" == "true" ]; then
+        curl -sL "${REPO_RAW_URL}/core/mod_google.sh" -o "${INSTALL_DIR}/core/mod_google.sh"
+        curl -sL "${REPO_RAW_URL}/data/keywords/kw_${REGION_CODE}.txt" -o "${INSTALL_DIR}/data/keywords/kw_${REGION_CODE}.txt"
+    fi
+    
+    if [ "$ENABLE_TRUST" == "true" ]; then
+        curl -sL "${REPO_RAW_URL}/core/mod_trust.sh" -o "${INSTALL_DIR}/core/mod_trust.sh"
+    fi
+    
+    chmod +x ${INSTALL_DIR}/core/*.sh
+    
+    echo -e "\033[32m✅ 最新核心引擎已部署！\033[0m"
+    
+    # 重新配置定时任务
+    echo -e "\n⏳ 正在恢复系统定时任务..."
+    crontab -l 2>/dev/null | grep -v "ip_sentinel" > /tmp/cron_backup
+    
+    # 核心养护模块
+    echo "*/30 * * * * ${INSTALL_DIR}/core/runner.sh >/dev/null 2>&1" >> /tmp/cron_backup
+    # 养料更新模块
+    echo "0 3 * * 0 ${INSTALL_DIR}/core/updater.sh >/dev/null 2>&1" >> /tmp/cron_backup
+    
+    # 如果配置了联控，恢复Webhook任务
+    if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
+        echo "0 8 * * * ${INSTALL_DIR}/core/tg_report.sh >/dev/null 2>&1" >> /tmp/cron_backup
+        echo "$BIND_IP" > "${INSTALL_DIR}/core/.last_ip"
+        echo "@reboot nohup bash ${INSTALL_DIR}/core/agent_daemon.sh >/dev/null 2>&1 &" >> /tmp/cron_backup
+        echo "* * * * * nohup bash ${INSTALL_DIR}/core/agent_daemon.sh >/dev/null 2>&1 &" >> /tmp/cron_backup
+        
+        # 启动守护进程
+        nohup bash "${INSTALL_DIR}/core/agent_daemon.sh" >/dev/null 2>&1 &
+    fi
+    
+    crontab /tmp/cron_backup
+    rm -f /tmp/cron_backup
+    
+    echo -e "\033[32m✅ 定时任务已恢复！\033[0m"
+    
+    echo "========================================================"
+    echo -e "\033[32m🎉 智能更新完成！所有配置已保留。\033[0m"
+    echo "📍 节点区域: $REGION_NAME"
+    echo "🌐 绑定IP: $BIND_IP"
+    echo "🔌 监听端口: $AGENT_PORT"
+    echo "========================================================"
+    
+    exit 0
+fi
+# =================================================================
 
 # ================== [v3.1.1 新增: 安装前环境纯净度清理 (严格保留日志)] ==================
 echo -e "\n⏳ 正在清理旧版守护进程与冗余任务 (保留历史日志)..."

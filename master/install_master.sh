@@ -13,11 +13,13 @@ echo "========================================================"
 echo "      🧠 欢迎使用 IP-Sentinel Master (控制中枢)"
 echo "========================================================"
 
-# [新增] 交互式操作菜单：支持选择部署或调用卸载程序
+# [新增] 交互式操作菜单：支持选择部署、更新或卸载
 echo -e "\n请选择操作:"
 echo "  1) 🚀 部署 Master 控制中枢"
 echo "  2) 🗑️ 一键卸载 Master 中枢"
-read -p "请输入选择 [1-2] (默认1): " ACTION_CHOICE
+echo "  3) 🔄 智能更新 (保留现有配置)"
+read -p "请输入选择 [1-3] (默认1): " ACTION_CHOICE
+ACTION_CHOICE=${ACTION_CHOICE:-1}
 
 if [ "$ACTION_CHOICE" == "2" ]; then
     echo -e "\n⏳ 正在拉取卸载程序..."
@@ -28,6 +30,69 @@ if [ "$ACTION_CHOICE" == "2" ]; then
     rm -f "/tmp/uninstall_master.sh"
     exit 0
 fi
+
+# ================== [v3.2.2 新增: Master 智能更新模式] ==================
+if [ "$ACTION_CHOICE" == "3" ]; then
+    MASTER_CONF="${MASTER_DIR}/master.conf"
+    
+    echo -e "\n🔄 正在检测现有配置..."
+    
+    if [ ! -f "$MASTER_CONF" ]; then
+        echo -e "\033[31m❌ 未找到 Master 配置文件！请先执行完整部署。\033[0m"
+        exit 1
+    fi
+    
+    # 读取现有配置
+    source "$MASTER_CONF"
+    
+    if [ -z "$TG_TOKEN" ]; then
+        echo -e "\033[31m❌ 配置文件中缺少 Bot Token！\033[0m"
+        exit 1
+    fi
+    
+    echo -e "\033[32m✅ 检测到现有配置:\033[0m"
+    echo "  🤖 Bot Token: ${TG_TOKEN:0:20}..."
+    echo "  📁 数据目录: $MASTER_DIR"
+    echo "  🗄️  数据库: $DB_FILE"
+    
+    echo -e "\n⏳ 正在清理旧版 Master 守护进程..."
+    pkill -9 -f "tg_master.sh" >/dev/null 2>&1 || true
+    
+    # 清除旧版看门狗任务
+    crontab -l 2>/dev/null | grep -v "tg_master.sh" > /tmp/cron_clean
+    crontab /tmp/cron_clean
+    rm -f /tmp/cron_clean
+    
+    echo -e "\033[32m✅ 旧版守护进程已清理！\033[0m"
+    echo -e "\n⏳ 正在拉取最新 Master 核心..."
+    
+    # 拉取最新调度代码
+    curl -sL "${REPO_RAW_URL}/master/tg_master.sh" -o "${MASTER_DIR}/tg_master.sh"
+    chmod +x "${MASTER_DIR}/tg_master.sh"
+    
+    echo -e "\033[32m✅ 最新 Master 核心已部署！\033[0m"
+    
+    # 重新配置看门狗
+    echo -e "\n⏳ 正在恢复看门狗监控..."
+    crontab -l 2>/dev/null | grep -v "tg_master.sh" > /tmp/cron_master
+    echo "* * * * * pgrep -f tg_master.sh >/dev/null || nohup bash ${MASTER_DIR}/tg_master.sh >/dev/null 2>&1 &" >> /tmp/cron_master
+    crontab /tmp/cron_master
+    rm -f /tmp/cron_master
+    
+    # 启动 Master
+    pgrep -f tg_master.sh >/dev/null || nohup bash "${MASTER_DIR}/tg_master.sh" >/dev/null 2>&1 &
+    
+    echo -e "\033[32m✅ Master 守护进程已启动！\033[0m"
+    
+    echo "========================================================"
+    echo -e "\033[32m🎉 Master 智能更新完成！\033[0m"
+    echo "🤖 机器人已恢复监听"
+    echo "🗄️  所有节点数据已保留"
+    echo "========================================================"
+    
+    exit 0
+fi
+# =====================================================================
 
 # ================== [v3.1.1 延续: 安装前环境纯净度清理] ==================
 echo -e "\n⏳ 正在清理旧版 Master 守护进程 (绝对安全保留 SQLite 数据库)..."
