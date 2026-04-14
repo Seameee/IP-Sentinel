@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================================
-# 脚本名称: agent_daemon.sh (受控节点 Webhook 守护进程 V3.3.1)
+# 脚本名称: agent_daemon.sh (受控节点 Webhook 守护进程 v3.4.0 版本锚点版)
 # 核心功能: 智能防打扰注册、进程自检、模块级路由分发(403拦截)
 # ==========================================================
 
@@ -17,7 +17,9 @@ source "$CONFIG_FILE"
 
 # 默认 Webhook 监听端口
 AGENT_PORT=${AGENT_PORT:-9527}
-NODE_NAME=$(hostname | cut -c 1-15)
+# [v3.4.0 核心] 统一采用防 Markdown 崩溃的中划线连接符
+IP_HASH=$(echo "${PUBLIC_IP:-127.0.0.1}" | md5sum | cut -c 1-4 | tr 'a-z' 'A-Z')
+NODE_NAME="$(hostname | cut -c 1-10)-${IP_HASH}"
 
 # --- [重点升级 1: 守护进程防冲突自检] ---
 if pgrep -f "webhook.py $AGENT_PORT" > /dev/null; then
@@ -204,8 +206,13 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
                         if lines:
                             log_data = html.escape("".join(lines[-15:]))
                 
-                node_name = subprocess.check_output(['hostname']).decode('utf-8').strip()[:15]
-                text_msg = f"📄 <b>[{node_name}] 实时运行日志:</b>\n<pre><code>{log_data}</code></pre>"
+                # [v3.4.0 核心] 获取版本与主机名
+                local_ver = config.get('AGENT_VERSION', '未知')
+                node_hostname = subprocess.check_output(['hostname']).decode('utf-8').strip()[:10]
+                ip_hash = hashlib.md5(config.get('PUBLIC_IP', '127.0.0.1').encode()).hexdigest()[:4].upper()
+                full_node_name = f"{node_hostname}-{ip_hash}"
+                
+                text_msg = f"📄 <b>[{full_node_name}] 实时日志 (v{local_ver}):</b>\n<pre><code>{log_data}</code></pre>"
                 
                 data = urllib.parse.urlencode({
                     'chat_id': config.get('CHAT_ID', ''),
